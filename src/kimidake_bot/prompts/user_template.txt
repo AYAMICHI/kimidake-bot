@@ -1,0 +1,9 @@
+入力データ:
+- nickname: {nickname}
+- birthday: {birthday}
+- gender: {gender}
+- concern: {concern}
+
+補助データ（材料。文章に無理に出さなくていい）:
+- life_path_number: {life_path}
+- birth_month: {birth_month}
