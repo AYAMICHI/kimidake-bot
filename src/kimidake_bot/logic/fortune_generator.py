@@ -50,7 +50,8 @@ class FortuneGenerator:
                 )
         return text
 
-    def generate(self, raw: FortuneInput, *, settings) -> str:
+    def generate(self, raw: FortuneInput, *, settings, premium: bool = False) -> str:
+        model = settings.model_premium if premium else settings.model_default
         fi = FortuneInput(
             nickname=validate_nickname(raw.nickname),
             birthday=validate_birthday(raw.birthday),
@@ -60,7 +61,7 @@ class FortuneGenerator:
 
         user_prompt = self._render_user_prompt(fi)
         out = self.llm_client.generate_fortune(
-            model=settings.model,
+            model=model,
             system_prompt=self.system_prompt,
             user_prompt=user_prompt,
             max_output_tokens=settings.max_output_tokens,

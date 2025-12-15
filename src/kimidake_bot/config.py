@@ -7,9 +7,13 @@ load_dotenv()  # .env を読む（ローカル用）
 @dataclass(frozen=True)
 class Settings:
     openai_api_key: str
-    model: str = "gpt-5.2"
+    # 通常鑑定（MVP・無料・検証用）
+    model_default: str = "gpt-4.1-mini"
+    # 特別鑑定（将来の有料・深掘り用）
+    model_premium: str = "gpt-5.2"
     max_output_tokens: int = 420
-    temperature: float = 0.8  # “自然さ”を出しつつ暴れすぎない
+    # miniは少し高めの方が人間っぽくなる
+    temperature: float = 0.85  # “自然さ”を出しつつ暴れすぎない
 
 def get_settings() -> Settings:
     key = os.getenv("OPENAI_API_KEY")
