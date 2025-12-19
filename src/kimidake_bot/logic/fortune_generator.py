@@ -7,10 +7,29 @@ from kimidake_bot.utils.validators import (
     validate_birthday, validate_concern, validate_gender, validate_nickname
 )
 
-BANNED_HINTS = [
-    "宇宙", "波動", "引き寄せ", "高次元", "ソウルメイト",
-    "必ず儲かる", "絶対治る",
+WORLDVIEW_BANNED = [
+    "宇宙", "波動", "引き寄せ", "高次元", "ソウルメイト"
 ]
+
+HARD_BANNED = [
+    "必ず儲かる", "絶対治る"
+]
+
+WORLDVIEW_FALLBACK_TEXT = (
+    "大きな流れや特別な力を考えなくていい。\n"
+    "いま見てほしいのは、目の前の現実だけ。\n\n"
+    "今日できたことを一つ思い出して。\n"
+    "それが、次に進むための十分な材料になる。"
+)
+
+HARD_FALLBACK_TEXT = (
+    "いまの君は、ちょっと疲れてる。\n"
+    "頑張りたい気持ちはあるのに、心が先にブレーキを踏んでる。\n\n"
+    "今日やることは一つだけ。\n"
+    "「5分だけ」手を動かして、止まってる感覚を壊す。\n"
+    "小さく動いた瞬間から、流れは戻る。"
+)
+
 
 @dataclass(frozen=True)
 class FortuneInput:
@@ -38,16 +57,14 @@ class FortuneGenerator:
         )
 
     def _basic_safety_check(self, text: str) -> str:
-        # MVP: 禁止ワードが濃ければ“やさしく差し替え”
-        for w in BANNED_HINTS:
-            if w in text:
-                return (
-                    "いまの君は、ちょっと疲れてる。\n"
-                    "頑張りたい気持ちはあるのに、心が先にブレーキを踏んでる。\n"
-                    "今日やることは一つだけ。\n"
-                    "「5分だけ」手を動かして、止まってる感覚を壊す。\n"
-                    "小さく動いた瞬間から、流れは戻る。"
-                )
+        # 危険断定 -> メンタル寄りの固定文
+        if any(w in text for w in HARD_BANNED):
+            return HARD_FALLBACK_TEXT
+        
+        # 世界観ずれ ->トーン調整用の軽い文章
+        if any(w in text for w in WORLDVIEW_BANNED):
+            return WORLDVIEW_FALLBACK_TEXT
+        
         return text
 
     def generate(self, raw: FortuneInput, *, settings, premium: bool = False) -> str:

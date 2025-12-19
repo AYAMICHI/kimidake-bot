@@ -1,75 +1,122 @@
-# Kimidake Bot
+# 君だけ（kimidake-bot）
 
-キマダケボット — 数秘術とAIを組み合わせた占い生成ボット
+「スピリチュアルに寄らず、現実に立脚した言葉」で  
+今の自分を少しだけ前に進めるための占いBot。
 
-## 概要
+断定しない。依存させない。  
+“考えるきっかけ”だけを渡すことを目的にしています。
 
-このプロジェクトは、OpenAI APIを利用して数秘術に基づいた占いを生成するボットです。ユーザーの生年月日や名前から運勢を計算し、パーソナライズされた占いの結果を提供します。
+---
 
-## 機能
+## コンセプト
 
-- 数秘術による運勢計算
-- AIによる詳細な占い生成
-- 入力値の検証
-- 設定管理
+- 宇宙・波動・引き寄せに頼らない
+- 金銭・医療などの**結果保証をしない**
+- 読み手の判断力を奪わない
+- 行動につながる「現実的な言葉」を返す
 
-## セットアップ
+占いというより、  
+**短い内省ガイド**に近い設計です。
 
-### 前提条件
+---
 
-- Python 3.8以上
-- OpenAI APIキー
+## 技術スタック
 
-### インストール
+- Python
+- OpenAI API（GPT-4.1 mini）
+- dotenv（ローカル環境用）
 
-1. リポジトリをクローン
-```bash
-git clone <repository_url>
-cd kimidake-bot
+---
+
+## ディレクトリ構成（抜粋）
+
 ```
 
-2. 仮想環境を作成
+kimidake-bot/
+├─ src/
+│  ├─ logic/
+│  │  └─ fortune_generator.py
+│  ├─ safety/
+│  │  └─ safety_check.py
+│  └─ config.py
+├─ .env.example
+├─ requirements.txt
+└─ README.md
+
+````
+
+---
+
+## 安全設計について（重要）
+
+本プロジェクトでは  
+**system prompt だけに安全性を任せません。**
+
+生成後のテキストに対して  
+コード側で最終チェックを行います。
+
+### 禁止表現の分類
+
+#### 1. 危険な断定表現（HARD）
+- 「必ず儲かる」
+- 「絶対治る」
+
+→ 検出時は **全文を安全な固定文に差し替え**
+
+#### 2. 世界観のズレ（WORLDVIEW）
+- 「宇宙」「波動」「引き寄せ」「高次元」「ソウルメイト」
+
+→ 検出時は **トーン調整用の軽い文章に差し替え**
+
+この2段構えにより  
+- 事故を防ぎつつ
+- UXの違和感も最小化しています
+
+---
+
+## ローカル実行方法
+
+### 1. 環境変数の準備
 ```bash
-python -m venv venv
-source venv/bin/activate  # macOS/Linux
-venv\Scripts\activate     # Windows
+cp .env.example .env
+````
+
+`.env` に OpenAI API Key を設定：
+
+```
+OPENAI_API_KEY=sk-xxxxxxxx
 ```
 
-3. 依存パッケージをインストール
+### 2. 依存関係のインストール
+
 ```bash
 pip install -r requirements.txt
 ```
 
-4. 環境変数を設定
-```bash
-cp .env.example .env
-# .envファイルを編集してOpenAI APIキーを設定
-```
-
-## 使用方法
+### 3. 実行
 
 ```bash
-python src/kimidake_bot/main.py
+python main.py
 ```
 
-## プロジェクト構造
+---
 
-```
-kimidake-bot/
-├── src/
-│   └── kimidake_bot/
-│       ├── __init__.py
-│       ├── config.py           # 設定管理
-│       ├── main.py             # エントリーポイント
-│       ├── prompts/            # AIプロンプト
-│       ├── services/           # 外部サービス連携
-│       ├── logic/              # ビジネスロジック
-│       └── utils/              # ユーティリティ
-├── .env.example                # 環境変数テンプレート
-├── requirements.txt            # 依存パッケージ
-└── README.md                   # このファイル
-```
+## 注意事項
+
+* `.env` は **Git管理しません**
+* 本プロジェクトは医療・投資・法律アドバイスを行いません
+* 占い結果は意思決定の代替ではありません
+
+---
+
+## 今後の予定（TODO）
+
+* LINE Bot 連携
+* プレミアム鑑定（GPT-5.2）の追加
+* ログ保存による文章品質改善
+
+---
 
 ## ライセンス
 
-MIT License
+Private / Personal Project
