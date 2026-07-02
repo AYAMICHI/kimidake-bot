@@ -34,7 +34,7 @@ app.mount("/static", StaticFiles(directory=PACKAGE_DIR / "static"), name="static
 class FortuneRequest(BaseModel):
     nickname: str | None = Field(default=None, max_length=30)
     category: Literal["love", "reconciliation", "compatibility", "work", "today"]
-    concern: str = Field(min_length=1, max_length=800)
+    concern: str = Field(min_length=1, max_length=10_000)
 
     @field_validator("nickname")
     @classmethod
@@ -79,7 +79,7 @@ async def validation_error_handler(
 ) -> JSONResponse:
     return JSONResponse(
         status_code=400,
-        content={"result": "", "error": "入力内容を確認してください。悩みは800文字以内です。"},
+        content={"result": "", "error": "入力内容を確認してください。"},
     )
 
 
@@ -90,6 +90,27 @@ async def index(request: Request) -> HTMLResponse:
 
 @app.post("/api/fortune", response_model=FortuneResponse)
 async def create_fortune(payload: FortuneRequest, request: Request):
+    try:
+        generator, settings = get_generator()
+    except Exception as exc:
+        logger.warning("fortune_configuration_failed type=%s", type(exc).__name__)
+        return JSONResponse(
+            status_code=503,
+            content={
+                "result": "",
+                "error": "現在、鑑定を利用できません。時間をおいてもう一度お試しください。",
+            },
+        )
+
+    if len(payload.concern) > settings.max_input_chars_free:
+        return JSONResponse(
+            status_code=400,
+            content={
+                "result": "",
+                "error": f"悩みは{settings.max_input_chars_free}文字以内で入力してください。",
+            },
+        )
+
     if is_crisis_concern(payload.concern):
         logger.warning("fortune_crisis_redirected")
         return FortuneResponse(result=CRISIS_MESSAGE)
@@ -105,7 +126,6 @@ async def create_fortune(payload: FortuneRequest, request: Request):
 
     started = perf_counter()
     try:
-        generator, settings = get_generator()
         fortune_input = WebFortuneInput(
             nickname=payload.nickname,
             category=payload.category,

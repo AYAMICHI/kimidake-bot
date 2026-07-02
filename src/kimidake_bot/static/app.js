@@ -8,7 +8,7 @@ const resultSection = document.querySelector("#result-section");
 const result = document.querySelector("#fortune-result");
 
 concern.addEventListener("input", () => {
-  counter.textContent = `${concern.value.length} / 800`;
+  counter.textContent = `${concern.value.length} / 400`;
 });
 
 form.addEventListener("submit", async (event) => {
