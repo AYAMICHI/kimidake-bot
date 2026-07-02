@@ -2,8 +2,8 @@ from __future__ import annotations
 from openai import OpenAI
 
 class OpenAITextClient:
-    def __init__(self, api_key: str):
-        self.client = OpenAI(api_key=api_key)
+    def __init__(self, api_key: str, *, timeout: float = 25.0):
+        self.client = OpenAI(api_key=api_key, timeout=timeout, max_retries=1)
 
     def generate_fortune(
         self,

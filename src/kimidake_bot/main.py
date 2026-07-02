@@ -1,10 +1,12 @@
 from pathlib import Path
 
-from kimidake_bot.config import get_settings
-from kimidake_bot.logic.fortune_generator import FortuneGenerator, FortuneInput
-from kimidake_bot.services.openai_client import OpenAITextClient
+from .logging_config import setup_logger
+from .config import get_settings
+from src.kimidake_bot.logic.fortune_generator import FortuneGenerator, FortuneInput
+from src.kimidake_bot.services.openai_client import OpenAITextClient
 
 def main():
+    setup_logger()
     settings = get_settings()
 
     prompts_dir = Path(__file__).parent / "prompts"

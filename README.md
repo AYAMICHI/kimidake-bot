@@ -1,122 +1,87 @@
-# 君だけ（kimidake-bot）
+# 君だけの占い
 
-「スピリチュアルに寄らず、現実に立脚した言葉」で  
-今の自分を少しだけ前に進めるための占いBot。
+悩みを入力すると、AIが占いとして気持ちを読み解く1ページWeb MVPです。
 
-断定しない。依存させない。  
-“考えるきっかけ”だけを渡すことを目的にしています。
+本サービスの出力は娯楽・自己理解を目的とし、未来や結果を保証しません。医療、法律、投資などの専門的助言でもありません。
 
----
+## 機能
 
-## コンセプト
+- 占いジャンル選択（恋愛、復縁、相性、仕事、今日の運勢）
+- 任意のニックネームと悩み入力
+- OpenAI Responses APIによる鑑定文生成
+- 入力長制限、危険相談の簡易検出
+- IP単位の簡易レート制限（1分間に3回）
+- プレミアム鑑定の仮導線
+- 利用規約等の仮ページ
 
-- 宇宙・波動・引き寄せに頼らない
-- 金銭・医療などの**結果保証をしない**
-- 読み手の判断力を奪わない
-- 行動につながる「現実的な言葉」を返す
+初回MVPでは、ログイン、DB、LINE連携、Stripe決済、継続チャットは実装していません。
 
-占いというより、  
-**短い内省ガイド**に近い設計です。
+## 必要環境
 
----
+- Python 3.12推奨
+- OpenAI APIキー
 
-## 技術スタック
+## セットアップ
 
-- Python
-- OpenAI API（GPT-4.1 mini）
-- dotenv（ローカル環境用）
+PowerShellでリポジトリ直下から実行します。
 
----
-
-## ディレクトリ構成（抜粋）
-
-```
-
-kimidake-bot/
-├─ src/
-│  ├─ logic/
-│  │  └─ fortune_generator.py
-│  ├─ safety/
-│  │  └─ safety_check.py
-│  └─ config.py
-├─ .env.example
-├─ requirements.txt
-└─ README.md
-
-````
-
----
-
-## 安全設計について（重要）
-
-本プロジェクトでは  
-**system prompt だけに安全性を任せません。**
-
-生成後のテキストに対して  
-コード側で最終チェックを行います。
-
-### 禁止表現の分類
-
-#### 1. 危険な断定表現（HARD）
-- 「必ず儲かる」
-- 「絶対治る」
-
-→ 検出時は **全文を安全な固定文に差し替え**
-
-#### 2. 世界観のズレ（WORLDVIEW）
-- 「宇宙」「波動」「引き寄せ」「高次元」「ソウルメイト」
-
-→ 検出時は **トーン調整用の軽い文章に差し替え**
-
-この2段構えにより  
-- 事故を防ぎつつ
-- UXの違和感も最小化しています
-
----
-
-## ローカル実行方法
-
-### 1. 環境変数の準備
-```bash
-cp .env.example .env
-````
-
-`.env` に OpenAI API Key を設定：
-
-```
-OPENAI_API_KEY=sk-xxxxxxxx
-```
-
-### 2. 依存関係のインストール
-
-```bash
+```powershell
+python -m venv .venv
+.\.venv\Scripts\Activate.ps1
 pip install -r requirements.txt
+Copy-Item .env.example .env
 ```
 
-### 3. 実行
+`.env`を編集します。
 
-```bash
-python main.py
+```env
+OPENAI_API_KEY=sk-your-key-here
+OPENAI_MODEL_FREE=gpt-4.1-mini
+OPENAI_MODEL_PREMIUM=gpt-5.2
 ```
 
----
+`OPENAI_MODEL_PREMIUM`は将来の決済接続用です。現在の生成処理では使用しません。
 
-## 注意事項
+## 起動
 
-* `.env` は **Git管理しません**
-* 本プロジェクトは医療・投資・法律アドバイスを行いません
-* 占い結果は意思決定の代替ではありません
+```powershell
+uvicorn src.kimidake_bot.web:app --reload
+```
 
----
+ブラウザで <http://127.0.0.1:8000> を開きます。
 
-## 今後の予定（TODO）
+## API
 
-* LINE Bot 連携
-* プレミアム鑑定（GPT-5.2）の追加
-* ログ保存による文章品質改善
+### `POST /api/fortune`
 
----
+リクエスト例：
 
-## ライセンス
+```json
+{
+  "nickname": "あおい",
+  "category": "love",
+  "concern": "相手の気持ちが分からず、どう向き合えばよいか悩んでいます。"
+}
+```
 
-Private / Personal Project
+レスポンス例：
+
+```json
+{
+  "result": "鑑定結果",
+  "error": null
+}
+```
+
+カテゴリ値は`love`、`reconciliation`、`compatibility`、`work`、`today`のいずれかです。
+
+## 注意
+
+- APIキーはサーバー側だけで使用し、HTMLやJavaScriptへ渡しません。
+- 悩み本文やAI出力全文はアプリケーションログへ保存しません。
+- 簡易レート制限は単一プロセスのメモリ内実装です。複数プロセス・複数台構成ではRedis等へ置き換えてください。
+- 法務ページは仮文面です。正式公開前に事業者情報と運用実態に合わせて確定してください。
+
+## 旧CLI
+
+旧CLIコードは参照用に残していますが、製品の入口には使用しません。Web MVPの入口は`src.kimidake_bot.web:app`です。

@@ -1,0 +1,20 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>{{ title }} | 君だけの占い</title>
+    <link rel="stylesheet" href="{{ url_for('static', path='/styles.css') }}">
+  </head>
+  <body>
+    <main class="page-shell legal-page">
+      <a class="back-link" href="/">← 占いに戻る</a>
+      <section class="card">
+        <p class="eyebrow">INFORMATION</p>
+        <h1>{{ title }}</h1>
+        <p>{{ body }}</p>
+        <p class="placeholder-note">現在はMVP検証用の仮ページです。正式公開前に内容を確定します。</p>
+      </section>
+    </main>
+  </body>
+</html>
