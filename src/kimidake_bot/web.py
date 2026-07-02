@@ -19,6 +19,7 @@ from .config import get_settings
 from .logic.web_fortune import WebFortuneGenerator, WebFortuneInput
 from .rate_limit import InMemoryRateLimiter
 from .safety import CRISIS_MESSAGE, is_crisis_concern
+from .services.mock_ai_client import MockOpenAITextClient
 from .services.openai_client import OpenAITextClient
 
 
@@ -61,10 +62,13 @@ class FortuneResponse(BaseModel):
 @lru_cache(maxsize=1)
 def get_generator() -> tuple[WebFortuneGenerator, object]:
     settings = get_settings()
-    client = OpenAITextClient(
-        api_key=settings.openai_api_key,
-        timeout=settings.request_timeout_seconds,
-    )
+    if settings.use_mock_ai:
+        client = MockOpenAITextClient()
+    else:
+        client = OpenAITextClient(
+            api_key=settings.openai_api_key,
+            timeout=settings.request_timeout_seconds,
+        )
     generator = WebFortuneGenerator(PACKAGE_DIR / "prompts", client)
     return generator, settings
 
@@ -158,7 +162,7 @@ async def create_fortune(payload: FortuneRequest, request: Request):
     estimated_tokens = max(1, len(result) // 4)
     logger.info(
         "fortune_succeeded model=%s elapsed_ms=%d estimated_output_tokens=%d",
-        settings.model_free,
+        "mock" if settings.use_mock_ai else settings.model_free,
         elapsed_ms,
         estimated_tokens,
     )

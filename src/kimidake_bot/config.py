@@ -4,7 +4,8 @@ from dotenv import load_dotenv
 
 @dataclass(frozen=True)
 class Settings:
-    openai_api_key: str
+    openai_api_key: str | None
+    use_mock_ai: bool
     model_free: str
     model_premium: str
     max_input_chars_free: int
@@ -38,10 +39,23 @@ def _required_positive_int(name: str) -> int:
         raise RuntimeError(f"{name} must be greater than zero.")
     return value
 
+
+def _optional_bool(name: str, *, default: bool = False) -> bool:
+    raw = os.getenv(name)
+    if raw is None or not raw.strip():
+        return default
+    normalized = raw.strip().lower()
+    if normalized == "true":
+        return True
+    if normalized == "false":
+        return False
+    raise RuntimeError(f"{name} must be true or false.")
+
 def get_settings() -> Settings:
     load_dotenv()  # .env を読む（ローカル用）
+    use_mock_ai = _optional_bool("USE_MOCK_AI")
     key = os.getenv("OPENAI_API_KEY")
-    if not key:
+    if not key and not use_mock_ai:
         raise RuntimeError("OPENAI_API_KEY is missing. Set it in .env or environment variables.")
     model_free = os.getenv("OPENAI_MODEL_FREE")
     if not model_free:
@@ -51,6 +65,7 @@ def get_settings() -> Settings:
         raise RuntimeError("OPENAI_MODEL_PREMIUM is missing. Set it in .env or environment variables.")
     return Settings(
         openai_api_key=key,
+        use_mock_ai=use_mock_ai,
         model_free=model_free,
         model_premium=model_premium,
         max_input_chars_free=_required_positive_int("MAX_INPUT_CHARS_FREE"),

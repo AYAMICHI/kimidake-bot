@@ -37,6 +37,7 @@ Copy-Item .env.example .env
 
 ```env
 OPENAI_API_KEY=sk-your-key-here
+USE_MOCK_AI=false
 OPENAI_MODEL_FREE=gpt-5.4-mini
 OPENAI_MODEL_PREMIUM=gpt-5.5
 MAX_INPUT_CHARS_FREE=400
@@ -46,6 +47,24 @@ MAX_OUTPUT_TOKENS_PREMIUM=1800
 ```
 
 `OPENAI_MODEL_PREMIUM`は将来の決済接続用です。現在の生成処理では使用しません。
+
+### OpenAI APIを呼ばずに画面を確認する
+
+開発中にAPI料金を発生させたくない場合は、`.env`を次のように設定します。
+
+```env
+USE_MOCK_AI=true
+```
+
+固定のモック鑑定文が返り、OpenAI APIクライアントは使用されません。設定変更後はサーバーを再起動してください。
+
+実際の占い品質を確認するときと本番環境では、必ず次の設定を使用します。
+
+```env
+USE_MOCK_AI=false
+```
+
+`false`または未設定の場合は通常どおりOpenAI APIを呼び出すため、有効な`OPENAI_API_KEY`が必要です。
 
 ## 起動
 
@@ -83,6 +102,7 @@ uvicorn src.kimidake_bot.web:app --reload
 ## 注意
 
 - APIキーはサーバー側だけで使用し、HTMLやJavaScriptへ渡しません。
+- `USE_MOCK_AI=true`は画面・API・エラー表示の開発確認専用です。本番品質の評価には使用しません。
 - 悩み本文やAI出力全文はアプリケーションログへ保存しません。
 - チャット履歴は保持・送信せず、1回の相談だけをOpenAI APIへ送ります。
 - 無料鑑定は、核心、現在の流れ、やりがちな失敗1つ、今日の行動1つに絞ります。
