@@ -56,6 +56,11 @@ class WebAppTest(TestCase):
         self.assertIn("残すべき強みや収入の芽", app_js.text)
         self.assertIn("生年月日から見た、仕事で力を活かしやすい方向", app_js.text)
         self.assertIn('replaceAll("/", "-")', app_js.text)
+        self.assertIn('trackEvent("result_view"', app_js.text)
+        self.assertIn('"cta_click"', app_js.text)
+        self.assertIn("navigator.sendBeacon", app_js.text)
+        self.assertIn("keepalive: true", app_js.text)
+        self.assertIn("sessionStorage", app_js.text)
         for path in ("/terms", "/privacy", "/tokusho", "/contact", "/premium"):
             self.assertEqual(self.client.get(path).status_code, 200)
 

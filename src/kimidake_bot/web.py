@@ -13,9 +13,16 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 from starlette.concurrency import run_in_threadpool
 
+from .analytics import (
+    AnalyticsEvent,
+    AnalyticsStore,
+    analytics_enabled,
+    analytics_storage,
+    hash_user_agent,
+)
 from .config import get_settings
 from .logic.web_fortune import WebFortuneGenerator, WebFortuneInput
 from .rate_limit import InMemoryRateLimiter
@@ -83,6 +90,23 @@ class FortuneResponse(BaseModel):
     error: str | None = None
 
 
+class AnalyticsEventRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    event_name: Literal["result_view", "cta_click"]
+    category: Literal["love", "reconciliation", "compatibility", "work", "today"]
+    has_birthdate: bool
+    session_id: str = Field(
+        min_length=16,
+        max_length=64,
+        pattern=r"^[A-Za-z0-9_-]+$",
+    )
+
+
+class AnalyticsEventResponse(BaseModel):
+    ok: bool
+
+
 @lru_cache(maxsize=1)
 def get_generator() -> tuple[WebFortuneGenerator, object]:
     settings = get_settings()
@@ -95,6 +119,30 @@ def get_generator() -> tuple[WebFortuneGenerator, object]:
         )
     generator = WebFortuneGenerator(PACKAGE_DIR / "prompts", client)
     return generator, settings
+
+
+@lru_cache(maxsize=1)
+def get_analytics_store() -> AnalyticsStore | None:
+    if not analytics_enabled():
+        return None
+    if analytics_storage() != "sqlite":
+        raise RuntimeError("Only sqlite analytics storage is supported")
+    return AnalyticsStore()
+
+
+def save_analytics_event(payload: AnalyticsEventRequest, user_agent: str | None) -> None:
+    store = get_analytics_store()
+    if store is None:
+        return
+    store.record_event(
+        AnalyticsEvent(
+            event_name=payload.event_name,
+            category=payload.category,
+            has_birthdate=payload.has_birthdate,
+            session_id=payload.session_id,
+            user_agent_hash=hash_user_agent(user_agent),
+        )
+    )
 
 
 def client_key(request: Request) -> str:
@@ -204,6 +252,22 @@ async def create_fortune(payload: FortuneRequest, request: Request):
     return FortuneResponse(result=result)
 
 
+@app.post("/api/events", response_model=AnalyticsEventResponse)
+async def record_analytics_event(
+    payload: AnalyticsEventRequest, request: Request
+) -> AnalyticsEventResponse:
+    try:
+        await run_in_threadpool(
+            save_analytics_event,
+            payload,
+            request.headers.get("user-agent"),
+        )
+    except Exception as exc:
+        logger.warning("analytics_event_failed type=%s", type(exc).__name__)
+        return AnalyticsEventResponse(ok=False)
+    return AnalyticsEventResponse(ok=True)
+
+
 LEGAL_PAGES = {
     "terms": {
         "title": "利用規約",
@@ -211,7 +275,7 @@ LEGAL_PAGES = {
     },
     "privacy": {
         "title": "プライバシーポリシー",
-        "body": "正式公開までに、入力情報の利用目的、OpenAI APIへの送信、保存期間、削除と問い合わせ方法について記載します。",
+        "body": "正式公開までに、入力情報の利用目的、OpenAI APIへの送信、匿名利用イベント、保存期間、削除と問い合わせ方法について記載します。",
     },
     "tokusho": {
         "title": "特定商取引法に基づく表記",

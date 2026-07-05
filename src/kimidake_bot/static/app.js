@@ -9,6 +9,11 @@ const result = document.querySelector("#fortune-result");
 const premiumContext = document.querySelector("#premium-context");
 const premiumPoints = document.querySelector("#premium-points");
 const premiumButtonLabel = document.querySelector("#premium-button-label");
+const premiumButton = document.querySelector(".premium-button");
+
+const analyticsSessionKey = "kimidake_analytics_session_id";
+let fallbackSessionId = null;
+let currentResultContext = null;
 
 const premiumCtaByCategory = {
   love: {
@@ -67,6 +72,16 @@ concern.addEventListener("input", () => {
   counter.textContent = `${concern.value.length} / 400`;
 });
 
+premiumButton.addEventListener("click", () => {
+  if (currentResultContext) {
+    trackEvent(
+      "cta_click",
+      currentResultContext.category,
+      currentResultContext.hasBirthdate,
+    );
+  }
+});
+
 form.addEventListener("submit", async (event) => {
   event.preventDefault();
 
@@ -102,6 +117,11 @@ form.addEventListener("submit", async (event) => {
     result.textContent = data.result;
     updatePremiumCta(payload.category, Boolean(payload.birthday));
     resultSection.hidden = false;
+    currentResultContext = {
+      category: payload.category,
+      hasBirthdate: Boolean(payload.birthday),
+    };
+    trackEvent("result_view", payload.category, Boolean(payload.birthday));
     resultSection.scrollIntoView({ behavior: "smooth", block: "start" });
   } catch (error) {
     showError(error instanceof Error ? error.message : "通信に失敗しました。もう一度お試しください。");
@@ -113,6 +133,66 @@ form.addEventListener("submit", async (event) => {
 function normalizeBirthday(value) {
   const normalized = value.trim().replaceAll("/", "-");
   return normalized || null;
+}
+
+function createAnonymousSessionId() {
+  if (globalThis.crypto?.randomUUID) {
+    return globalThis.crypto.randomUUID();
+  }
+  if (globalThis.crypto?.getRandomValues) {
+    const bytes = new Uint8Array(16);
+    globalThis.crypto.getRandomValues(bytes);
+    return Array.from(bytes, (byte) => byte.toString(16).padStart(2, "0")).join("");
+  }
+  return `anonymous_${Date.now().toString(36)}_${Math.random().toString(36).slice(2)}`;
+}
+
+function getAnonymousSessionId() {
+  if (fallbackSessionId) {
+    return fallbackSessionId;
+  }
+  try {
+    const stored = sessionStorage.getItem(analyticsSessionKey);
+    if (stored) {
+      return stored;
+    }
+    const created = createAnonymousSessionId();
+    sessionStorage.setItem(analyticsSessionKey, created);
+    return created;
+  } catch {
+    fallbackSessionId = createAnonymousSessionId();
+    return fallbackSessionId;
+  }
+}
+
+function trackEvent(eventName, category, hasBirthdate) {
+  const body = JSON.stringify({
+    event_name: eventName,
+    category,
+    has_birthdate: hasBirthdate,
+    session_id: getAnonymousSessionId(),
+  });
+
+  try {
+    if (navigator.sendBeacon) {
+      const queued = navigator.sendBeacon(
+        "/api/events",
+        new Blob([body], { type: "application/json" }),
+      );
+      if (queued) {
+        return;
+      }
+    }
+  } catch {
+    // 計測失敗は画面操作へ影響させない。
+  }
+
+  fetch("/api/events", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body,
+    keepalive: true,
+  }).catch(() => {});
 }
 
 function setLoading(isLoading) {

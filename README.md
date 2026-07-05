@@ -129,3 +129,33 @@ model=gpt-5.4-mini input_tokens=1000 output_tokens=300 total_tokens=1300 estimat
 ## 旧CLI
 
 旧CLIコードは参照用に残していますが、製品の入口には使用しません。Web MVPの入口は`src.kimidake_bot.web:app`です。
+
+## 匿名CTAイベント計測
+
+無料鑑定の表示に対してプレミアム鑑定CTAが何回押されたかを、CTAクリック率（`cta_click / result_view * 100`）として確認できます。鑑定生成とは独立しており、ブラウザは計測完了を待ちません。
+
+`.env`の設定は次のとおりです。
+
+```env
+ANALYTICS_ENABLED=true
+ANALYTICS_STORAGE=sqlite
+```
+
+`ANALYTICS_ENABLED=false`にするとイベントを保存しません。現在対応する保存方式は`sqlite`のみで、保存先は`data/analytics.sqlite3`です。
+
+計測イベントは次の2種類です。
+
+- `result_view`: 無料鑑定結果が画面に表示された時
+- `cta_click`: プレミアム鑑定CTAが押された時
+
+保存する項目はイベント名、ジャンル、生年月日の入力有無、サーバー側の記録時刻、ブラウザセッション単位の匿名ランダムID、User-Agentの短いSHA-256ハッシュです。悩み本文、AI鑑定結果、生年月日、ニックネーム、生のUser-Agent、生のIPアドレス、メールアドレス、OpenAI APIキーは保存しません。
+
+ブラウザでは`sessionStorage`へ匿名IDを保持し、まず`navigator.sendBeacon`で送信します。利用できない場合だけ`fetch`の`keepalive`へフォールバックします。送信失敗は画面に表示せず、CTAの遷移や鑑定生成を止めません。
+
+集計はリポジトリ直下で次のコマンドを実行します。
+
+```powershell
+python -m src.kimidake_bot.analytics_report
+```
+
+全体およびジャンル別の`result_view`件数、`cta_click`件数、CTAクリック率が表示されます。本番デプロイでは、`data/analytics.sqlite3`の保存先が永続ディスクか確認してください。コンテナの一時ファイル領域へ置くと、再起動や再デプロイで計測データが消えます。また、複数インスタンス構成へ移行する場合は共有DBまたは外部分析基盤への移行が必要です。
