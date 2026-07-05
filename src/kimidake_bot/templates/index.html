@@ -5,8 +5,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="description" content="悩みに寄り添い、今の気持ちを読み解くAI占いサービスです。">
     <title>君だけの占い</title>
-    <link rel="stylesheet" href="{{ url_for('static', path='/styles.css') }}">
-    <script src="{{ url_for('static', path='/app.js') }}" defer></script>
+    <link rel="stylesheet" href="{{ url_for('static', path='/styles.css') }}?v=20260705-cta-card">
+    <script src="{{ url_for('static', path='/app.js') }}?v=20260705-cta-card" defer></script>
   </head>
   <body>
     <main class="page-shell">
@@ -31,6 +31,10 @@
           <label for="nickname">ニックネーム <span class="optional">任意</span></label>
           <input id="nickname" name="nickname" type="text" maxlength="30" autocomplete="nickname" placeholder="例：あおい">
 
+          <label for="birthday">生年月日 <span class="optional">任意</span></label>
+          <p id="birthday-help" class="field-help">入力すると、数秘術や星座の要素を加えて、よりあなた向けに鑑定します。</p>
+          <input id="birthday" name="birthday" type="date" min="{{ birthday_min }}" max="{{ birthday_max }}" placeholder="例：2000-11-22 または 2000/11/22" aria-describedby="birthday-help">
+
           <div class="label-row">
             <label for="concern">いまの悩み <span class="required">必須</span></label>
             <span id="concern-count" class="counter">0 / 400</span>
@@ -52,12 +56,23 @@
         <h2 id="result-heading">鑑定結果</h2>
         <div id="fortune-result" class="fortune-result" aria-live="polite"></div>
 
+        <div class="premium-divider" aria-hidden="true"></div>
+
         <!-- PREMIUM_CTA: Stripe Checkout接続時はこのリンクをCheckout開始処理へ置き換える -->
         <div class="premium-box" data-premium-cta>
-          <p>さらに深く占うと、相手の本音、今後の流れ、やってはいけない行動、今取るべき具体的な一手まで詳しく見られます。</p>
+          <p class="premium-kicker">PREMIUM READING</p>
+          <h3>この先で見えること</h3>
+          <p id="premium-context" class="premium-context">相談内容から、次のポイントをさらに詳しく見ていきます。</p>
+          <ul id="premium-points" class="premium-points">
+            <li>相手が今この関係をどう受け止めていそうか</li>
+            <li>距離を縮めるなら、どんな連絡が届きやすいか</li>
+            <li>今見えている関係の分岐</li>
+            <li>今やると逆効果になりやすいこと</li>
+          </ul>
           <a class="premium-button" href="/premium">
-            <strong>500円で深く占う</strong>
+            <strong id="premium-button-label">相手の本音と次の一手を見る</strong>
           </a>
+          <p class="premium-price">プレミアム鑑定 500円</p>
         </div>
       </section>
 

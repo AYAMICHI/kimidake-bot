@@ -120,8 +120,7 @@ class FortuneGenerator:
         logger.info("[fortune] hook_question=%s", is_question)
 
 
-        # 最終出力ログ
+        # 最終出力のメタデータだけを記録し、鑑定本文は保存しない
         logger.info("[fortune] done model=%s premium=%s fallback=%s chars=%d", model, premium, fallback, len(out))
-        logger.info("[fortune] output:\n%s", out)
         
         return out

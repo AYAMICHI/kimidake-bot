@@ -2,9 +2,10 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import re
+from datetime import date
 from functools import lru_cache
 from pathlib import Path
-from time import perf_counter
 from typing import Literal
 
 from fastapi import FastAPI, Request
@@ -34,6 +35,7 @@ app.mount("/static", StaticFiles(directory=PACKAGE_DIR / "static"), name="static
 
 class FortuneRequest(BaseModel):
     nickname: str | None = Field(default=None, max_length=30)
+    birthday: date | None = None
     category: Literal["love", "reconciliation", "compatibility", "work", "today"]
     concern: str = Field(min_length=1, max_length=10_000)
 
@@ -44,6 +46,28 @@ class FortuneRequest(BaseModel):
             return None
         cleaned = value.strip()
         return cleaned or None
+
+    @field_validator("birthday", mode="before")
+    @classmethod
+    def validate_birthday(cls, value):
+        if value is None or value == "":
+            return None
+        if isinstance(value, date):
+            birthday = value
+        else:
+            if not isinstance(value, str) or not re.fullmatch(r"\d{4}([-\/])\d{2}\1\d{2}", value):
+                raise ValueError("生年月日はYYYY-MM-DDまたはYYYY/MM/DD形式で入力してください")
+            try:
+                birthday = date.fromisoformat(value.replace("/", "-"))
+            except ValueError as exc:
+                raise ValueError("存在する日付を入力してください") from exc
+
+        today = date.today()
+        if birthday > today:
+            raise ValueError("未来の生年月日は入力できません")
+        if birthday < oldest_allowed_birthday(today):
+            raise ValueError("生年月日は過去120年以内で入力してください")
+        return birthday
 
     @field_validator("concern")
     @classmethod
@@ -77,19 +101,38 @@ def client_key(request: Request) -> str:
     return request.client.host if request.client else "unknown"
 
 
+def oldest_allowed_birthday(today: date) -> date:
+    try:
+        return today.replace(year=today.year - 120)
+    except ValueError:
+        return today.replace(year=today.year - 120, day=28)
+
+
 @app.exception_handler(RequestValidationError)
 async def validation_error_handler(
-    _request: Request, _exc: RequestValidationError
+    _request: Request, exc: RequestValidationError
 ) -> JSONResponse:
+    if any("birthday" in error.get("loc", ()) for error in exc.errors()):
+        message = "生年月日はYYYY-MM-DDまたはYYYY/MM/DD形式の実在する過去120年以内の日付で入力してください。"
+    else:
+        message = "入力内容を確認してください。"
     return JSONResponse(
         status_code=400,
-        content={"result": "", "error": "入力内容を確認してください。"},
+        content={"result": "", "error": message},
     )
 
 
 @app.get("/", response_class=HTMLResponse)
 async def index(request: Request) -> HTMLResponse:
-    return templates.TemplateResponse(request=request, name="index.html")
+    today = date.today()
+    return templates.TemplateResponse(
+        request=request,
+        name="index.html",
+        context={
+            "birthday_min": oldest_allowed_birthday(today).isoformat(),
+            "birthday_max": today.isoformat(),
+        },
+    )
 
 
 @app.post("/api/fortune", response_model=FortuneResponse)
@@ -128,10 +171,10 @@ async def create_fortune(payload: FortuneRequest, request: Request):
             },
         )
 
-    started = perf_counter()
     try:
         fortune_input = WebFortuneInput(
             nickname=payload.nickname,
+            birthday=payload.birthday,
             category=payload.category,
             concern=payload.concern,
         )
@@ -158,14 +201,6 @@ async def create_fortune(payload: FortuneRequest, request: Request):
             },
         )
 
-    elapsed_ms = int((perf_counter() - started) * 1000)
-    estimated_tokens = max(1, len(result) // 4)
-    logger.info(
-        "fortune_succeeded model=%s elapsed_ms=%d estimated_output_tokens=%d",
-        "mock" if settings.use_mock_ai else settings.model_free,
-        elapsed_ms,
-        estimated_tokens,
-    )
     return FortuneResponse(result=result)
 
 
