@@ -5,10 +5,10 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="description" content="悩みに寄り添い、今の気持ちを読み解くAI占いサービスです。">
     <title>君だけの占い</title>
-    <link rel="stylesheet" href="{{ url_for('static', path='/styles.css') }}?v=20260705-cta-card">
-    <script src="{{ url_for('static', path='/app.js') }}?v=20260705-analytics" defer></script>
+    <link rel="stylesheet" href="{{ url_for('static', path='/styles.css') }}?v=20260705-premium-preview">
+    <script src="{{ url_for('static', path='/app.js') }}?v=20260705-premium-preview" defer></script>
   </head>
-  <body>
+  <body data-premium-preview-enabled="{{ 'true' if premium_preview_enabled else 'false' }}">
     <main class="page-shell">
       <header class="hero">
         <p class="eyebrow">AI FORTUNE READING</p>
@@ -73,7 +73,21 @@
             <strong id="premium-button-label">相手の本音と次の一手を見る</strong>
           </a>
           <p class="premium-price">プレミアム鑑定 500円</p>
+          {% if premium_preview_enabled %}
+          <p class="premium-preview-notice">開発用プレビュー：決済は発生しませんが、実API利用時はOpenAI料金が発生します。</p>
+          {% endif %}
         </div>
+      </section>
+
+      <section id="premium-preview-section" class="card premium-preview-card" aria-labelledby="premium-preview-heading" hidden>
+        <p class="eyebrow">PREMIUM PREVIEW</p>
+        <h2 id="premium-preview-heading">プレミアム鑑定プレビュー</h2>
+        <div id="premium-preview-loading" class="loading" role="status" aria-live="polite" hidden>
+          <span class="spinner" aria-hidden="true"></span>
+          <span id="premium-preview-loading-text">あなたの流れを深く読み解いています…</span>
+        </div>
+        <p id="premium-preview-error" class="error-message" role="alert" hidden></p>
+        <div id="premium-fortune-result" class="fortune-result premium-fortune-result" aria-live="polite"></div>
       </section>
 
       <aside class="disclaimer" aria-label="免責事項">

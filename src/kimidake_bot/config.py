@@ -6,6 +6,7 @@ from dotenv import load_dotenv
 class Settings:
     openai_api_key: str | None
     use_mock_ai: bool
+    enable_premium_preview: bool
     model_free: str
     model_premium: str
     max_input_chars_free: int
@@ -51,6 +52,11 @@ def _optional_bool(name: str, *, default: bool = False) -> bool:
         return False
     raise RuntimeError(f"{name} must be true or false.")
 
+
+def premium_preview_enabled() -> bool:
+    load_dotenv()
+    return _optional_bool("ENABLE_PREMIUM_PREVIEW")
+
 def get_settings() -> Settings:
     load_dotenv()  # .env を読む（ローカル用）
     use_mock_ai = _optional_bool("USE_MOCK_AI")
@@ -66,6 +72,7 @@ def get_settings() -> Settings:
     return Settings(
         openai_api_key=key,
         use_mock_ai=use_mock_ai,
+        enable_premium_preview=premium_preview_enabled(),
         model_free=model_free,
         model_premium=model_premium,
         max_input_chars_free=_required_positive_int("MAX_INPUT_CHARS_FREE"),

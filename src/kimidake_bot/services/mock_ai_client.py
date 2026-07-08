@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from .generation_result import GenerationResult
+
 
 MOCK_FORTUNE_RESULT = (
     "今つらいのは、まだ答えが出ないことより、ここまで選んできた自分まで間違いだったように感じ始めていることです。\n\n"
@@ -8,9 +10,21 @@ MOCK_FORTUNE_RESULT = (
     "ここから先で見えてくるのは、残すべき芽がどこにあるか、何を手放すと流れが戻るか、次の一手をどこへ置くべきかという分岐です。"
 )
 
+MOCK_PREMIUM_FORTUNE_RESULT = (
+    "【鑑定の総論】\n今揺れているのは、答えが出ないことだけではなく、自分の選択を信じる基準まで曖昧になっているからです。今は結論を急ぐ相ではなく、残っている反応と惰性を見分ける転換点に見えます。\n\n"
+    "【今見えている流れ】\n完全に閉じる流れより、関わり方を一段変えることで動き方が見えやすくなる時期です。強く押すより、相手や状況から返ってくる小さな反応を基準にすると、期待だけで進む分岐を避けやすくなります。\n\n"
+    "【いま避けたいこと】\n早く安心するために、反応がない一度だけで全体を失敗と決めることです。同時に、同じ方法を繰り返して消耗する動きも今の流れとは合いません。\n\n"
+    "【次の一手】\n次は、大きな答えを取りに行くより、負担の少ない一度の接点を置き、その後の反応を見る形が現実的です。返ってくる速さより、会話や状況が自然に続くかを判断材料にしてください。\n\n"
+    "【近い期間の見方】\n今日から3日は自分の焦り、1週間は相手や状況から返る反応、2週間は無理なく続けられる形が残るかを見ます。変化の大きさより、迷いが減る方向を選ぶことが鍵です。\n\n"
+    "【最後の一言】\n答えを急ぐより、答えが育つ余白を守る時です。"
+)
+
 
 class MockOpenAITextClient:
     """開発時に外部通信なしで固定鑑定文を返すクライアント。"""
 
     def generate_fortune(self, **_kwargs) -> str:
         return MOCK_FORTUNE_RESULT
+
+    def generate_fortune_with_metadata(self, *, model: str, **_kwargs) -> GenerationResult:
+        return GenerationResult(text=MOCK_PREMIUM_FORTUNE_RESULT, model=model)

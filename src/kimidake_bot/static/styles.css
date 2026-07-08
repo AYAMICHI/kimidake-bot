@@ -328,6 +328,22 @@ textarea:focus {
   font-size: 0.75rem;
 }
 
+.premium-preview-notice {
+  margin: 12px 0 0;
+  color: var(--muted);
+  text-align: center;
+  font-size: 0.72rem;
+}
+
+.premium-preview-card {
+  scroll-margin-top: 24px;
+  border-color: rgba(122, 70, 109, 0.24);
+}
+
+.premium-fortune-result {
+  margin-top: 18px;
+}
+
 .disclaimer {
   padding: 22px 8px;
   color: var(--muted);

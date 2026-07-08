@@ -39,6 +39,7 @@ Copy-Item .env.example .env
 ```env
 OPENAI_API_KEY=sk-your-key-here
 USE_MOCK_AI=false
+ENABLE_PREMIUM_PREVIEW=false
 OPENAI_MODEL_FREE=gpt-5.4-mini
 OPENAI_MODEL_PREMIUM=gpt-5.5
 MAX_INPUT_CHARS_FREE=400
@@ -47,7 +48,7 @@ MAX_INPUT_CHARS_PREMIUM=1200
 MAX_OUTPUT_TOKENS_PREMIUM=1800
 ```
 
-`OPENAI_MODEL_PREMIUM`は将来の決済接続用です。現在の生成処理では使用しません。
+`OPENAI_MODEL_PREMIUM`は、`ENABLE_PREMIUM_PREVIEW=true`の開発用プレミアム鑑定で使用します。
 
 ### OpenAI APIを呼ばずに画面を確認する
 
@@ -103,6 +104,35 @@ uvicorn src.kimidake_bot.web:app --reload
 
 `birthday`は任意です。`YYYY-MM-DD`と`YYYY/MM/DD`の両方を受け付け、内部では`YYYY-MM-DD`へ正規化します。未来日、存在しない日付、120歳を超える日付は受け付けません。
 
+### `POST /api/premium-fortune`
+
+決済接続前にプレミアム鑑定の品質を確認する開発用APIです。`ENABLE_PREMIUM_PREVIEW=false`では`403`を返します。
+
+```json
+{
+  "nickname": "あおい",
+  "birthdate": "2000/11/22",
+  "category": "work",
+  "concern": "副業を始めましたが、なかなか収益が出なくて諦めそうです。",
+  "free_result": "無料鑑定結果"
+}
+```
+
+```json
+{
+  "result": "プレミアム鑑定結果",
+  "error": null,
+  "estimated_cost_usd": "0.02500000",
+  "usage": {
+    "input_tokens": 1200,
+    "output_tokens": 600,
+    "total_tokens": 1800
+  }
+}
+```
+
+`estimated_cost_usd`は説明用の例です。実際の値はAPIレスポンスのusageとコード内のモデル単価から計算されます。
+
 ## 注意
 
 - APIキーはサーバー側だけで使用し、HTMLやJavaScriptへ渡しません。
@@ -125,6 +155,49 @@ model=gpt-5.4-mini input_tokens=1000 output_tokens=300 total_tokens=1300 estimat
 ```
 
 悩み本文とAI出力全文は表示しません。概算料金はコード内のモデル単価と`response.usage`から計算するため、OpenAIの料金改定後は単価表の更新が必要です。モック利用時はOpenAI APIを呼ばないため使用量ログも出ません。
+
+## プレミアム鑑定プレビュー
+
+目的はStripe接続前に、プレミアム鑑定が500円以上の価値に見えるかと、1回あたりのAPIコストをローカルで確認することです。Stripe決済、購入権限、ユーザーDB、ログインは接続していません。
+
+`.env`を次のように変更し、サーバーを再起動します。
+
+```env
+ENABLE_PREMIUM_PREVIEW=true
+USE_MOCK_AI=false
+```
+
+無料鑑定を実行して結果下のCTAを押すと、同じ画面にプレミアム鑑定が表示されます。無料鑑定と同じ入力および無料結果を引き継ぎますが、ブラウザやサーバーのDB・ログには保存しません。無料結果は最大2000文字までをプロンプトへ渡します。
+
+実APIを使うためOpenAI API料金が発生します。画面下部と開発コンソールで`input_tokens`、`output_tokens`、`total_tokens`、`estimated_cost_usd`を確認してください。出力品質の確認では`USE_MOCK_AI=false`を使用します。画面だけ確認する場合は`USE_MOCK_AI=true`でも固定のプレミアム鑑定を表示できます。
+
+プレミアム鑑定は次を深掘りします。
+
+- 相談全体と内側の葛藤
+- 生年月日がある場合の自然な個別傾向
+- 現在の流れと見えている分岐
+- 避けたい動きとその理由
+- 反応に応じて変えられる具体的な次の一手
+- 今日〜2週間程度に見るべき判断材料
+- 依存を促さず、自分で進むための最後の一言
+
+手動確認では、恋愛・復縁・仕事の各ジャンルで、生年月日`2000/11/22`と実際の相談文を入力します。特に「無料鑑定の繰り返しになっていないか」「分岐の見分け方があるか」「近い期間の観察点が具体的か」「未来や相手の本音を断定していないか」を確認してください。
+
+本番環境では必ず次の設定に戻してください。`false`では画面のCTAは従来どおり準備中ページへ移動し、プレミアムAPIは`403`で拒否されます。
+
+```env
+ENABLE_PREMIUM_PREVIEW=false
+```
+
+### OpenAI BadRequestの開発診断
+
+`ENABLE_PREMIUM_PREVIEW=true`でOpenAI APIが`BadRequestError`を返した場合、開発コンソールへ次の形式で表示します。
+
+```text
+openai_bad_request status_code=400 error_code=unsupported_parameter rejected_parameter=temperature error_message=Unsupported parameter: temperature
+```
+
+記録するのはstatus code、OpenAIのerror code、拒否されたパラメータ、エラーメッセージだけです。APIキー、悩み本文、生年月日、無料・プレミアム鑑定本文は記録せず、エラーメッセージ内に含まれた場合も伏せ字にします。エラーレスポンス全体やリクエスト本文はログへ出しません。
 
 ## 旧CLI
 

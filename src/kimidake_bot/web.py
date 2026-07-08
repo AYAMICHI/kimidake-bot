@@ -13,6 +13,7 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
+from openai import BadRequestError
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 from starlette.concurrency import run_in_threadpool
 
@@ -23,11 +24,13 @@ from .analytics import (
     analytics_storage,
     hash_user_agent,
 )
-from .config import get_settings
+from .config import get_settings, premium_preview_enabled
+from .logic.premium_fortune import PremiumFortuneGenerator
 from .logic.web_fortune import WebFortuneGenerator, WebFortuneInput
 from .rate_limit import InMemoryRateLimiter
 from .safety import CRISIS_MESSAGE, is_crisis_concern
 from .services.mock_ai_client import MockOpenAITextClient
+from .services.openai_error_diagnostics import log_openai_bad_request
 from .services.openai_client import OpenAITextClient
 
 
@@ -90,6 +93,44 @@ class FortuneResponse(BaseModel):
     error: str | None = None
 
 
+class PremiumFortuneRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    nickname: str | None = Field(default=None, max_length=30)
+    birthdate: date | None = None
+    category: Literal["love", "reconciliation", "compatibility", "work", "today"]
+    concern: str = Field(min_length=1, max_length=10_000)
+    free_result: str | None = Field(default=None, max_length=10_000)
+
+    @field_validator("nickname")
+    @classmethod
+    def clean_nickname(cls, value: str | None) -> str | None:
+        return FortuneRequest.clean_nickname(value)
+
+    @field_validator("birthdate", mode="before")
+    @classmethod
+    def validate_birthdate(cls, value):
+        return FortuneRequest.validate_birthday(value)
+
+    @field_validator("concern")
+    @classmethod
+    def clean_concern(cls, value: str) -> str:
+        return FortuneRequest.clean_concern(value)
+
+
+class UsageResponse(BaseModel):
+    input_tokens: int
+    output_tokens: int
+    total_tokens: int
+
+
+class PremiumFortuneResponse(BaseModel):
+    result: str = ""
+    error: str | None = None
+    estimated_cost_usd: str | None = None
+    usage: UsageResponse | None = None
+
+
 class AnalyticsEventRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -119,6 +160,11 @@ def get_generator() -> tuple[WebFortuneGenerator, object]:
         )
     generator = WebFortuneGenerator(PACKAGE_DIR / "prompts", client)
     return generator, settings
+
+
+def get_premium_generator() -> tuple[PremiumFortuneGenerator, object]:
+    free_generator, settings = get_generator()
+    return PremiumFortuneGenerator(PACKAGE_DIR / "prompts", free_generator.llm_client), settings
 
 
 @lru_cache(maxsize=1)
@@ -160,7 +206,10 @@ def oldest_allowed_birthday(today: date) -> date:
 async def validation_error_handler(
     _request: Request, exc: RequestValidationError
 ) -> JSONResponse:
-    if any("birthday" in error.get("loc", ()) for error in exc.errors()):
+    if any(
+        "birthday" in error.get("loc", ()) or "birthdate" in error.get("loc", ())
+        for error in exc.errors()
+    ):
         message = "生年月日はYYYY-MM-DDまたはYYYY/MM/DD形式の実在する過去120年以内の日付で入力してください。"
     else:
         message = "入力内容を確認してください。"
@@ -179,6 +228,7 @@ async def index(request: Request) -> HTMLResponse:
         context={
             "birthday_min": oldest_allowed_birthday(today).isoformat(),
             "birthday_max": today.isoformat(),
+            "premium_preview_enabled": premium_preview_enabled(),
         },
     )
 
@@ -250,6 +300,142 @@ async def create_fortune(payload: FortuneRequest, request: Request):
         )
 
     return FortuneResponse(result=result)
+
+
+@app.post("/api/premium-fortune", response_model=PremiumFortuneResponse)
+async def create_premium_fortune(payload: PremiumFortuneRequest, request: Request):
+    if not premium_preview_enabled():
+        return JSONResponse(
+            status_code=403,
+            content={
+                "result": "",
+                "error": "プレミアム鑑定プレビューは無効です。",
+                "estimated_cost_usd": None,
+                "usage": None,
+            },
+        )
+
+    try:
+        generator, settings = get_premium_generator()
+    except Exception as exc:
+        logger.warning("premium_configuration_failed type=%s", type(exc).__name__)
+        return JSONResponse(
+            status_code=503,
+            content={
+                "result": "",
+                "error": "現在、プレミアム鑑定を利用できません。",
+                "estimated_cost_usd": None,
+                "usage": None,
+            },
+        )
+
+    if not settings.enable_premium_preview:
+        return JSONResponse(
+            status_code=403,
+            content={
+                "result": "",
+                "error": "プレミアム鑑定プレビューは無効です。",
+                "estimated_cost_usd": None,
+                "usage": None,
+            },
+        )
+    if len(payload.concern) > settings.max_input_chars_premium:
+        return JSONResponse(
+            status_code=400,
+            content={
+                "result": "",
+                "error": f"悩みは{settings.max_input_chars_premium}文字以内で入力してください。",
+                "estimated_cost_usd": None,
+                "usage": None,
+            },
+        )
+    if is_crisis_concern(payload.concern):
+        logger.warning("premium_fortune_crisis_redirected")
+        return PremiumFortuneResponse(result=CRISIS_MESSAGE)
+    if not rate_limiter.allow(client_key(request)):
+        return JSONResponse(
+            status_code=429,
+            content={
+                "result": "",
+                "error": "短時間に多くのリクエストがありました。1分ほど待ってからお試しください。",
+                "estimated_cost_usd": None,
+                "usage": None,
+            },
+        )
+
+    try:
+        fortune_input = WebFortuneInput(
+            nickname=payload.nickname,
+            birthday=payload.birthdate,
+            category=payload.category,
+            concern=payload.concern,
+        )
+        generated = await asyncio.wait_for(
+            run_in_threadpool(
+                generator.generate,
+                fortune_input,
+                free_result=payload.free_result,
+                settings=settings,
+            ),
+            timeout=settings.request_timeout_seconds + 5,
+        )
+    except asyncio.TimeoutError:
+        logger.warning("premium_fortune_failed reason=timeout")
+        return JSONResponse(
+            status_code=504,
+            content={
+                "result": "",
+                "error": "プレミアム鑑定に時間がかかっています。少し待ってからもう一度お試しください。",
+                "estimated_cost_usd": None,
+                "usage": None,
+            },
+        )
+    except BadRequestError as exc:
+        birthdate_iso = payload.birthdate.isoformat() if payload.birthdate else None
+        birthdate_slash = birthdate_iso.replace("-", "/") if birthdate_iso else None
+        log_openai_bad_request(
+            exc,
+            sensitive_values=(
+                settings.openai_api_key,
+                payload.concern,
+                birthdate_iso,
+                birthdate_slash,
+                payload.free_result,
+            ),
+        )
+        return JSONResponse(
+            status_code=503,
+            content={
+                "result": "",
+                "error": "OpenAI APIがプレミアム鑑定リクエストを受け付けませんでした。開発コンソールを確認してください。",
+                "estimated_cost_usd": None,
+                "usage": None,
+            },
+        )
+    except Exception as exc:
+        logger.warning("premium_fortune_failed type=%s", type(exc).__name__)
+        return JSONResponse(
+            status_code=503,
+            content={
+                "result": "",
+                "error": "現在、プレミアム鑑定を利用できません。時間をおいてもう一度お試しください。",
+                "estimated_cost_usd": None,
+                "usage": None,
+            },
+        )
+
+    usage = None
+    if generated.usage is not None:
+        usage = UsageResponse(
+            input_tokens=generated.usage.input_tokens,
+            output_tokens=generated.usage.output_tokens,
+            total_tokens=generated.usage.total_tokens,
+        )
+    return PremiumFortuneResponse(
+        result=generated.result,
+        estimated_cost_usd=generated.estimated_cost_usd,
+        usage=usage,
+    )
 
 
 @app.post("/api/events", response_model=AnalyticsEventResponse)

@@ -39,6 +39,8 @@ class WebAppTest(TestCase):
         self.assertIn("この先で見えること", index.text)
         self.assertIn("相手の本音と次の一手を見る", index.text)
         self.assertIn("プレミアム鑑定 500円", index.text)
+        self.assertIn("あなたの流れを深く読み解いています…", index.text)
+        self.assertNotIn('id="premium-usage"', index.text)
         self.assertIn("生年月日", index.text)
         self.assertIn("数秘術や星座の要素", index.text)
         app_js = self.client.get("/static/app.js")
@@ -61,6 +63,15 @@ class WebAppTest(TestCase):
         self.assertIn("navigator.sendBeacon", app_js.text)
         self.assertIn("keepalive: true", app_js.text)
         self.assertIn("sessionStorage", app_js.text)
+        self.assertIn("/api/premium-fortune", app_js.text)
+        self.assertIn("free_result: context.freeResult", app_js.text)
+        self.assertIn("premiumPreviewEnabled", app_js.text)
+        self.assertIn("相手との今の距離を読み解いています…", app_js.text)
+        self.assertIn("今の仕事運と、次の一手を読み解いています…", app_js.text)
+        self.assertNotIn("input_tokens=", app_js.text)
+        self.assertNotIn("output_tokens=", app_js.text)
+        self.assertNotIn("total_tokens=", app_js.text)
+        self.assertNotIn("estimated_cost_usd=", app_js.text)
         for path in ("/terms", "/privacy", "/tokusho", "/contact", "/premium"):
             self.assertEqual(self.client.get(path).status_code, 200)
 
@@ -426,7 +437,9 @@ class WebAppTest(TestCase):
             patch("src.kimidake_bot.config.load_dotenv"),
             patch.dict(os.environ, base_env, clear=True),
         ):
-            self.assertFalse(get_settings().use_mock_ai)
+            settings = get_settings()
+            self.assertFalse(settings.use_mock_ai)
+            self.assertFalse(settings.enable_premium_preview)
 
 
 if __name__ == "__main__":

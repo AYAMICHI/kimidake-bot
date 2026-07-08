@@ -5,6 +5,8 @@ from dataclasses import dataclass
 
 from openai import OpenAI
 
+from .generation_result import GenerationResult, UsageSummary
+
 
 usage_logger = logging.getLogger("uvicorn.error")
 
@@ -67,6 +69,39 @@ def _log_usage(model: str, usage) -> None:
     )
 
 
+def _supports_sampling_parameters(model: str) -> bool:
+    """Return whether this model should receive sampling controls.
+
+    Some newer reasoning-oriented models reject parameters such as
+    ``temperature`` and ``top_p``. Keep this capability check centralized so
+    model-specific request shaping stays easy to adjust when env model names
+    change.
+    """
+
+    normalized = model.lower()
+    base_model = normalized.split("-20", 1)[0]
+    return base_model.endswith("-mini")
+
+
+def _response_create_params(
+    *,
+    model: str,
+    system_prompt: str,
+    user_prompt: str,
+    max_output_tokens: int,
+    temperature: float,
+) -> dict:
+    params = {
+        "model": model,
+        "instructions": system_prompt,
+        "input": user_prompt,
+        "max_output_tokens": max_output_tokens,
+    }
+    if _supports_sampling_parameters(model):
+        params["temperature"] = temperature
+    return params
+
+
 class OpenAITextClient:
     def __init__(self, api_key: str, *, timeout: float = 25.0):
         self.client = OpenAI(api_key=api_key, timeout=timeout, max_retries=1)
@@ -79,16 +114,48 @@ class OpenAITextClient:
         max_output_tokens: int,
         temperature: float,
     ) -> str:
-        # Responses API（公式推奨） :contentReference[oaicite:2]{index=2}
-        resp = self.client.responses.create(
+        return self.generate_fortune_with_metadata(
             model=model,
-            instructions=system_prompt,
-            input=user_prompt,
+            system_prompt=system_prompt,
+            user_prompt=user_prompt,
             max_output_tokens=max_output_tokens,
             temperature=temperature,
+        ).text
+
+    def generate_fortune_with_metadata(
+        self,
+        model: str,
+        system_prompt: str,
+        user_prompt: str,
+        max_output_tokens: int,
+        temperature: float,
+    ) -> GenerationResult:
+        resp = self.client.responses.create(
+            **_response_create_params(
+                model=model,
+                system_prompt=system_prompt,
+                user_prompt=user_prompt,
+                max_output_tokens=max_output_tokens,
+                temperature=temperature,
+            )
         )
+        response_model = getattr(resp, "model", None) or model
+        usage_summary = None
+        estimated_cost_text = None
         if resp.usage is not None:
-            response_model = getattr(resp, "model", None) or model
             _log_usage(response_model, resp.usage)
+            usage_summary = UsageSummary(
+                input_tokens=int(getattr(resp.usage, "input_tokens", 0) or 0),
+                output_tokens=int(getattr(resp.usage, "output_tokens", 0) or 0),
+                total_tokens=int(getattr(resp.usage, "total_tokens", 0) or 0),
+            )
+            estimated_cost = _estimated_cost_usd(response_model, resp.usage)
+            if estimated_cost is not None:
+                estimated_cost_text = f"{estimated_cost:.8f}"
         text = (resp.output_text or "").strip()
-        return text
+        return GenerationResult(
+            text=text,
+            model=response_model,
+            usage=usage_summary,
+            estimated_cost_usd=estimated_cost_text,
+        )

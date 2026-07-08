@@ -10,10 +10,17 @@ const premiumContext = document.querySelector("#premium-context");
 const premiumPoints = document.querySelector("#premium-points");
 const premiumButtonLabel = document.querySelector("#premium-button-label");
 const premiumButton = document.querySelector(".premium-button");
+const premiumPreviewEnabled = document.body.dataset.premiumPreviewEnabled === "true";
+const premiumPreviewSection = document.querySelector("#premium-preview-section");
+const premiumPreviewLoading = document.querySelector("#premium-preview-loading");
+const premiumPreviewLoadingText = document.querySelector("#premium-preview-loading-text");
+const premiumPreviewError = document.querySelector("#premium-preview-error");
+const premiumFortuneResult = document.querySelector("#premium-fortune-result");
 
 const analyticsSessionKey = "kimidake_analytics_session_id";
 let fallbackSessionId = null;
 let currentResultContext = null;
+let premiumPreviewInFlight = false;
 
 const premiumCtaByCategory = {
   love: {
@@ -68,17 +75,32 @@ const premiumCtaByCategory = {
   },
 };
 
+const premiumLoadingTextByCategory = {
+  love: "相手との今の距離を読み解いています…",
+  reconciliation: "二人の流れと、戻りやすい距離を読み解いています…",
+  compatibility: "二人の相性と、近づき方の流れを見ています…",
+  work: "今の仕事運と、次の一手を読み解いています…",
+  today: "今日の流れと、意識すべきことを読み解いています…",
+};
+
 concern.addEventListener("input", () => {
   counter.textContent = `${concern.value.length} / 400`;
 });
 
-premiumButton.addEventListener("click", () => {
+premiumButton.addEventListener("click", (event) => {
   if (currentResultContext) {
     trackEvent(
       "cta_click",
       currentResultContext.category,
       currentResultContext.hasBirthdate,
     );
+  }
+  if (!premiumPreviewEnabled || !currentResultContext) {
+    return;
+  }
+  event.preventDefault();
+  if (!premiumPreviewInFlight) {
+    generatePremiumPreview(currentResultContext);
   }
 });
 
@@ -101,6 +123,8 @@ form.addEventListener("submit", async (event) => {
   setLoading(true);
   errorMessage.hidden = true;
   resultSection.hidden = true;
+  premiumPreviewSection.hidden = true;
+  currentResultContext = null;
 
   try {
     const response = await fetch("/api/fortune", {
@@ -118,8 +142,12 @@ form.addEventListener("submit", async (event) => {
     updatePremiumCta(payload.category, Boolean(payload.birthday));
     resultSection.hidden = false;
     currentResultContext = {
+      nickname: payload.nickname,
       category: payload.category,
+      concern: payload.concern,
+      birthdate: payload.birthday,
       hasBirthdate: Boolean(payload.birthday),
+      freeResult: data.result,
     };
     trackEvent("result_view", payload.category, Boolean(payload.birthday));
     resultSection.scrollIntoView({ behavior: "smooth", block: "start" });
@@ -193,6 +221,43 @@ function trackEvent(eventName, category, hasBirthdate) {
     body,
     keepalive: true,
   }).catch(() => {});
+}
+
+async function generatePremiumPreview(context) {
+  premiumPreviewInFlight = true;
+  premiumPreviewSection.hidden = false;
+  premiumPreviewLoadingText.textContent = premiumLoadingTextByCategory[context.category] || "あなたの流れを深く読み解いています…";
+  premiumPreviewLoading.hidden = false;
+  premiumPreviewError.hidden = true;
+  premiumFortuneResult.textContent = "";
+  premiumPreviewSection.scrollIntoView({ behavior: "smooth", block: "start" });
+
+  try {
+    const response = await fetch("/api/premium-fortune", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        nickname: context.nickname,
+        category: context.category,
+        concern: context.concern,
+        birthdate: context.birthdate,
+        free_result: context.freeResult,
+      }),
+    });
+    const data = await response.json();
+    if (!response.ok || data.error) {
+      throw new Error(data.error || "プレミアム鑑定を取得できませんでした。");
+    }
+
+    premiumFortuneResult.textContent = data.result;
+  } catch (error) {
+    premiumPreviewError.textContent =
+      error instanceof Error ? error.message : "プレミアム鑑定の生成に失敗しました。";
+    premiumPreviewError.hidden = false;
+  } finally {
+    premiumPreviewLoading.hidden = true;
+    premiumPreviewInFlight = false;
+  }
 }
 
 function setLoading(isLoading) {

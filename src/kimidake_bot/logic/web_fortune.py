@@ -64,6 +64,30 @@ CATEGORY_CONTINUATION_ENDINGS = {
 }
 
 
+def build_birth_context(birthday: date | None) -> str:
+    if birthday is None:
+        birth_diagnostics_logger.info(
+            "birthdate_present=false zodiac_calculated=false life_path_calculated=false"
+        )
+        return ""
+
+    birthday_text = birthday.isoformat()
+    sign = zodiac_sign(birthday)
+    life_path = life_path_number(birthday_text)
+    birth_diagnostics_logger.info(
+        "birthdate_present=true zodiac_calculated=true life_path_calculated=true"
+    )
+    return (
+        "出生情報ブロック: あり\n"
+        f"生年月日: {birthday_text}\n"
+        f"星座: {sign}\n"
+        f"星座由来の読みの足場: {zodiac_reading_tendency(sign)}\n"
+        f"ライフパスナンバー: {life_path}\n"
+        f"数秘術由来の読みの足場: {life_path_reading_tendency(life_path)}\n"
+        "生年月日の使い方: 2つの読みの足場を両方使い、相談内容と結び付けた1つの自然な見立てに統合する。名称や数字の解説はしない\n"
+    )
+
+
 def _remove_forbidden_sentences(text: str) -> str:
     cleaned_paragraphs = []
     for paragraph in text.split("\n\n"):
@@ -107,30 +131,7 @@ class WebFortuneGenerator:
         category = CATEGORY_LABELS[fortune_input.category]
         category_guidance = CATEGORY_GUIDANCE[fortune_input.category]
         nickname = fortune_input.nickname or "なし"
-        birthday_context = ""
-        zodiac_calculated = False
-        life_path_calculated = False
-        if fortune_input.birthday is not None:
-            birthday_text = fortune_input.birthday.isoformat()
-            sign = zodiac_sign(fortune_input.birthday)
-            zodiac_calculated = True
-            life_path = life_path_number(birthday_text)
-            life_path_calculated = True
-            birthday_context = (
-                "出生情報ブロック: あり\n"
-                f"生年月日: {birthday_text}\n"
-                f"星座: {sign}\n"
-                f"星座由来の読みの足場: {zodiac_reading_tendency(sign)}\n"
-                f"ライフパスナンバー: {life_path}\n"
-                f"数秘術由来の読みの足場: {life_path_reading_tendency(life_path)}\n"
-                "生年月日の使い方: 2つの読みの足場を両方使い、相談内容と結び付けた1つの自然な見立てに統合する。名称や数字の解説はしない\n"
-            )
-        birth_diagnostics_logger.info(
-            "birthdate_present=%s zodiac_calculated=%s life_path_calculated=%s",
-            "true" if fortune_input.birthday is not None else "false",
-            "true" if zodiac_calculated else "false",
-            "true" if life_path_calculated else "false",
-        )
+        birthday_context = build_birth_context(fortune_input.birthday)
         user_prompt = (
             "以下の相談だけを根拠に、短くても核心を突く無料鑑定文を作成してください。\n\n"
             f"占いジャンル: {category}\n"

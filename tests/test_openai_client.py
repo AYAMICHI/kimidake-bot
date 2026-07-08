@@ -69,3 +69,79 @@ class OpenAITextClientTest(TestCase):
             )
 
         self.assertIn("estimated_cost_usd=unknown", "\n".join(captured.output))
+
+    def test_metadata_result_exposes_usage_and_estimated_cost(self):
+        response = SimpleNamespace(
+            model="gpt-5.5",
+            output_text="premium result",
+            usage=SimpleNamespace(
+                input_tokens=100,
+                output_tokens=200,
+                total_tokens=300,
+                input_tokens_details=SimpleNamespace(cached_tokens=0),
+            ),
+        )
+        sdk_client = Mock()
+        sdk_client.responses.create.return_value = response
+        client = OpenAITextClient.__new__(OpenAITextClient)
+        client.client = sdk_client
+
+        result = client.generate_fortune_with_metadata(
+            model="gpt-5.5",
+            system_prompt="system",
+            user_prompt="user",
+            max_output_tokens=1800,
+            temperature=0.85,
+        )
+
+        self.assertEqual(result.usage.input_tokens, 100)
+        self.assertEqual(result.usage.output_tokens, 200)
+        self.assertEqual(result.usage.total_tokens, 300)
+        self.assertEqual(result.estimated_cost_usd, "0.00650000")
+        self.assertEqual(
+            sdk_client.responses.create.call_args.kwargs["max_output_tokens"], 1800
+        )
+
+    def test_gpt_5_5_request_omits_sampling_parameters(self):
+        response = SimpleNamespace(model="gpt-5.5", output_text="result", usage=None)
+        sdk_client = Mock()
+        sdk_client.responses.create.return_value = response
+        client = OpenAITextClient.__new__(OpenAITextClient)
+        client.client = sdk_client
+
+        client.generate_fortune_with_metadata(
+            model="gpt-5.5",
+            system_prompt="system",
+            user_prompt="user",
+            max_output_tokens=1800,
+            temperature=0.85,
+        )
+
+        request = sdk_client.responses.create.call_args.kwargs
+        self.assertEqual(request["model"], "gpt-5.5")
+        self.assertEqual(request["max_output_tokens"], 1800)
+        self.assertNotIn("temperature", request)
+        self.assertNotIn("top_p", request)
+
+    def test_gpt_5_4_mini_request_keeps_existing_temperature_parameter(self):
+        response = SimpleNamespace(
+            model="gpt-5.4-mini", output_text="result", usage=None
+        )
+        sdk_client = Mock()
+        sdk_client.responses.create.return_value = response
+        client = OpenAITextClient.__new__(OpenAITextClient)
+        client.client = sdk_client
+
+        client.generate_fortune_with_metadata(
+            model="gpt-5.4-mini",
+            system_prompt="system",
+            user_prompt="user",
+            max_output_tokens=500,
+            temperature=0.85,
+        )
+
+        request = sdk_client.responses.create.call_args.kwargs
+        self.assertEqual(request["model"], "gpt-5.4-mini")
+        self.assertEqual(request["max_output_tokens"], 500)
+        self.assertEqual(request["temperature"], 0.85)
+        self.assertNotIn("top_p", request)
